@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aspire FAQ Platform — Full Feature Live Simulation</title>
+<style>
+:root{--brand:#003366;--bg:#f4f6f8}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial;background:var(--bg)}
+header{background:var(--brand);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px}
+header img{height:40px}
+.app{display:flex;height:calc(100vh - 64px)}
+.sidebar{width:320px;background:#fff;border-right:1px solid #ddd;padding:12px}
+.content{flex:1;padding:20px;overflow:auto}
+.hidden{display:none}
+.card{background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.1);padding:16px;margin-bottom:16px}
+.card img{max-width:100%;margin-top:10px;border-radius:6px}
+button{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+button.warn{background:#c62828;color:#fff;border-color:#c62828}
+button.link{border:none;background:none;color:var(--brand)}
+input,textarea,select{width:100%;padding:8px;border-radius:6px;border:1px solid #ccc;margin-bottom:8px}
+.admin{background:#e8f0fe;border-left:5px solid var(--brand);padding:14px;margin-bottom:16px}
+.section{margin-bottom:16px}
+.section h4{margin:0 0 8px 0}
+.row{display:flex;gap:8px;align-items:center}
+.flex{display:flex;flex-wrap:wrap;gap:8px}
+.cat button{width:100%;text-align:left;margin-bottom:6px}
+.search{margin-bottom:12px}
+.footer{font-size:12px;color:#666}
+</style>
+</head>
+<body>
+<header>
+  <img id="logo" class="hidden" />
+  <strong>Aspire FAQ Platform — Full Feature Live Simulation</strong>
+</header>
+<div class="app">
+  <div class="sidebar">
+    <div id="login">
+      <button class="primary" onclick="login('viewer')">Sign in (Viewer)</button><br><br>
+      <button onclick="login('admin')">Sign in (Admin)</button>
+      <p class="footer">Simulated Azure AD / Entra ID</p>
+    </div>
+    <div id="nav" class="hidden cat">
+      <h3>Categories</h3>
+      <div id="cats"></div>
+      <hr>
+      <button class="link" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+  <div class="content">
+    <div id="searchBar" class="search hidden">
+      <input id="searchInput" placeholder="Search FAQs (question, answer, category)…" />
+    </div>
+
+    <div id="adminPanel" class="admin hidden">
+      <div class="section">
+        <h4>Branding</h4>
+        <input type="file" accept="image/*" onchange="uploadLogo(event)" />
+      </div>
+      <div class="section">
+        <h4>Add / Edit FAQ</h4>
+        <select id="faqCat"></select>
+        <input id="faqQ" placeholder="Question" />
+        <textarea id="faqA" placeholder="Answer"></textarea>
+        <input type="file" accept="image/*" id="faqImg" />
+        <button class="primary" onclick="addFAQ()">Add FAQ</button>
+      </div>
+      <div class="section">
+        <h4>Manage Categories</h4>
+        <div class="row">
+          <input id="newCategory" placeholder="New category name" />
+          <button class="primary" onclick="addCategory()">Add</button>
+        </div>
+        <div id="categoryAdmin" class="flex"></div>
+      </div>
+    </div>
+
+    <div id="faqList"></div>
+  </div>
+</div>
+<script>
+// ================== STORAGE ==================
+const FAQ_KEY='aspire_all_features_faqs';
+const LOGO_KEY='aspire_all_features_logo';
+
+const seedFAQs=[
+ {id:1,cat:'Billing & Payments',q:'How can I find the balance breakdown?',a:'Use the Balance Due Calculator.',img:null},
+ {id:2,cat:'Refunds',q:'How long does a refund take?',a:'20–25 days after processing.',img:null},
+ {id:3,cat:'Cancellation',q:'How do I cancel a policy?',a:'A written cancellation request is required.',img:null}
+];
+
+let faqs=JSON.parse(localStorage.getItem(FAQ_KEY))||seedFAQs;
+let role=null, currentCat=null;
+
+const save=()=>localStorage.setItem(FAQ_KEY,JSON.stringify(faqs));
+
+// ================== AUTH ==================
+function login(r){
+ role=r;
+ document.getElementById('login').classList.add('hidden');
+ document.getElementById('nav').classList.remove('hidden');
+ document.getElementById('searchBar').classList.remove('hidden');
+ if(role==='admin') document.getElementById('adminPanel').classList.remove('hidden');
+ loadLogo(); renderCategories(); renderCategoryAdmin();
+ document.getElementById('searchInput').addEventListener('input', runSearch);
+}
+function logout(){ location.reload(); }
+
+// ================== LOGO ==================
+function uploadLogo(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=x=>{localStorage.setItem(LOGO_KEY,x.target.result); loadLogo();}; r.readAsDataURL(f);} 
+function loadLogo(){ const l=localStorage.getItem(LOGO_KEY); if(l){const img=document.getElementById('logo'); img.src=l; img.classList.remove('hidden');}}
+
+// ================== CATEGORIES ==================
+function categories(){ return [...new Set(faqs.map(f=>f.cat))].sort(); }
+function renderCategories(){ const c=document.getElementById('cats'); c.innerHTML=''; categories().forEach(cat=>{const b=document.createElement('button'); b.textContent=cat; b.onclick=()=>loadCategory(cat); c.appendChild(b);}); document.getElementById('faqCat').innerHTML=categories().map(c=>`<option>${c}</option>`).join(''); }
+
+function addCategory(){ const n=document.getElementById('newCategory').value.trim(); if(!n||categories().includes(n)) return alert('Invalid category'); faqs.push({id:Date.now(),cat:n,q:'Example question',a:'Edit or delete.',img:null}); save(); document.getElementById('newCategory').value=''; renderCategories(); renderCategoryAdmin(); loadCategory(n);} 
+function renameCategory(oldN){ const n=prompt('Rename category',oldN); if(!n||categories().includes(n)) return; faqs.forEach(f=>{if(f.cat===oldN)f.cat=n;}); save(); if(currentCat===oldN)currentCat=n; renderCategories(); renderCategoryAdmin(); runSearch(); }
+function deleteCategory(n){ if(!confirm(`Delete '${n}'? FAQs will move to Uncategorized.`)) return; faqs.forEach(f=>{if(f.cat===n)f.cat='Uncategorized';}); save(); if(currentCat===n)currentCat='Uncategorized'; renderCategories(); renderCategoryAdmin(); loadCategory('Uncategorized'); }
+
+function renderCategoryAdmin(){ if(role!=='admin') return; const d=document.getElementById('categoryAdmin'); d.innerHTML=''; categories().forEach(cat=>{const w=document.createElement('div'); const e=document.createElement('button'); const del=document.createElement('button'); w.textContent=cat+' '; e.textContent='Edit'; del.textContent='Delete'; del.className='warn'; e.onclick=()=>renameCategory(cat); del.onclick=()=>deleteCategory(cat); w.append(e,del); d.appendChild(w);}); }
+
+// ================== FAQ CRUD ==================
+function addFAQ(){ const c=document.getElementById('faqCat').value; const q=document.getElementById('faqQ').value; const a=document.getElementById('faqA').value; const imgF=document.getElementById('faqImg').files[0]; if(!q||!a) return alert('Question and Answer required');
+ if(imgF){ const r=new FileReader(); r.onload=x=>{faqs.push({id:Date.now(),cat:c,q,a,img:x.target.result}); save(); afterFAQAdd(c);} ; r.readAsDataURL(imgF);} else { faqs.push({id:Date.now(),cat:c,q,a,img:null}); save(); afterFAQAdd(c);} }
+function afterFAQAdd(c){ document.getElementById('faqQ').value=''; document.getElementById('faqA').value=''; document.getElementById('faqImg').value=''; renderCategories(); renderCategoryAdmin(); loadCategory(c);} 
+function editFAQ(id){ const f=faqs.find(x=>x.id===id); const q=prompt('Edit question',f.q); const a=prompt('Edit answer',f.a); if(q&&a){f.q=q;f.a=a; save(); runSearch();} }
+function deleteFAQ(id){ if(!confirm('Delete FAQ?')) return; faqs=faqs.filter(f=>f.id!==id); save(); renderCategories(); renderCategoryAdmin(); runSearch(); }
+
+// ================== SEARCH ==================
+function loadCategory(cat){ currentCat=cat; document.getElementById('searchInput').value=''; display(faqs.filter(f=>f.cat===cat)); }
+function runSearch(){ const t=document.getElementById('searchInput').value.toLowerCase().trim(); let r=faqs; if(currentCat) r=r.filter(f=>f.cat===currentCat); if(t) r=r.filter(f=>f.q.toLowerCase().includes(t)||f.a.toLowerCase().includes(t)||f.cat.toLowerCase().includes(t)); display(r);} 
+
+// ================== RENDER ==================
+function display(arr){ const d=document.getElementById('faqList'); d.innerHTML=''; if(!arr.length){d.innerHTML='<div class="card">No results found</div>'; return;} arr.forEach(f=>{ d.innerHTML+=`<div class='card'><b>Q:</b> ${f.q}<br><br><b>A:</b> ${f.a}${f.img?`<img src='${f.img}'/>`:''}${role==='admin'?`<div><button onclick='editFAQ(${f.id})'>Edit</button> <button class='warn' onclick='deleteFAQ(${f.id})'>Delete</button></div>`:''}</div>`;}); }
+</script>
+</body>
+</html>
